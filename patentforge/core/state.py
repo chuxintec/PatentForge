@@ -7,7 +7,7 @@ from typing import Any
 
 @dataclass(slots=True)
 class LoopState:
-    project_brief: str
+    design_spec: str
     draft: str = ""
     feedback: str = ""
     iteration: int = 0
@@ -38,14 +38,18 @@ class LoopResult:
     review: ReviewResult
     state: LoopState
     output_dir: Path
+    output_path: Path
+    log_file: Path | None = None
 
     def summary(self) -> str:
         status = "PASS" if self.passed else "STOPPED"
         lines = [
             f"Result: {status}",
             f"Iterations: {self.state.iteration}",
-            f"Output: {self.output_dir / 'final.md'}",
+            f"Code: {self.output_path}",
         ]
+        if self.log_file:
+            lines.append(f"Log file: {self.log_file}")
         if self.review.feedback:
             lines.append(f"Feedback: {self.review.feedback}")
         return "\n".join(lines)

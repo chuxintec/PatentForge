@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from textwrap import dedent
 from typing import Protocol, runtime_checkable
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from patentforge.llm.fallback_codegen import render_review_result, render_writer_output
+from patentforge.utils.env_loader import load_project_env
 
 
 @runtime_checkable
@@ -21,15 +28,16 @@ class OpenAIResponsesClient:
     _client: object = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        load_project_env()
         api_key = self.api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
+            raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env or export it before running.")
 
         try:
             from openai import OpenAI
         except ModuleNotFoundError as exc:
             raise RuntimeError(
-                "The openai package is not installed. Install patentforge[openai] or openai."
+                "The openai package is not installed. Install with `pip install \".[openai]\"` or `pip install openai`."
             ) from exc
 
         client_kwargs: dict[str, str] = {"api_key": api_key}
@@ -38,15 +46,143 @@ class OpenAIResponsesClient:
         self._client = OpenAI(**client_kwargs)
 
     def generate(self, model: str, system_prompt: str, user_prompt: str) -> str:
-        response = self._client.responses.create(
-            model=model,
-            instructions=system_prompt,
-            input=user_prompt,
+        logger = logging.getLogger("patentforge")
+        started = time.perf_counter()
+        logger.info(
+            "LLM request start provider=openai-sdk model=%s prompt_chars=%s",
+            model,
+            len(user_prompt),
         )
+        try:
+            response = self._client.responses.create(
+                model=model,
+                instructions=system_prompt,
+                input=user_prompt,
+            )
+        except Exception as exc:  # pragma: no cover - provider dependent
+            logger.info(
+                "LLM request failed provider=openai-sdk model=%s duration=%.2fs error=%s",
+                model,
+                time.perf_counter() - started,
+                exc,
+            )
+            raise
         output_text = getattr(response, "output_text", "") or ""
         if not output_text.strip():
             raise RuntimeError("OpenAI response did not contain output_text")
-        return output_text.strip()
+        cleaned = output_text.strip()
+        logger.info(
+            "LLM request done provider=openai-sdk model=%s duration=%.2fs output_chars=%s",
+            model,
+            time.perf_counter() - started,
+            len(cleaned),
+        )
+        return cleaned
+
+
+@dataclass(slots=True)
+class OpenAICompatibleHTTPClient:
+    api_key: str | None = None
+    base_url: str | None = None
+    timeout: int = 300
+
+    def __post_init__(self) -> None:
+        load_project_env()
+        api_key = self.api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env or export it before running.")
+
+        self.api_key = api_key
+        self.base_url = (self.base_url or os.getenv("OPENAI_BASE_URL") or "https://ai-model.chuxinhudong.com/v1").rstrip("/")
+        timeout_override = os.getenv("PATENTFORGE_HTTP_TIMEOUT")
+        if timeout_override:
+            try:
+                self.timeout = max(1, int(timeout_override))
+            except ValueError:
+                pass
+
+    def generate(self, model: str, system_prompt: str, user_prompt: str) -> str:
+        logger = logging.getLogger("patentforge")
+        logger.info(
+            "LLM request start provider=openai-http model=%s prompt_chars=%s",
+            model,
+            len(user_prompt),
+        )
+        started = time.perf_counter()
+        attempts: list[tuple[str, dict[str, object]]] = [
+            (
+                f"{self.base_url}/chat/completions",
+                {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": 4096,
+                },
+            ),
+            (
+                f"{self.base_url}/responses",
+                {
+                    "model": model,
+                    "instructions": system_prompt,
+                    "input": user_prompt,
+                    "max_output_tokens": 4096,
+                },
+            ),
+        ]
+
+        errors: list[str] = []
+        for url, payload in attempts:
+            try:
+                logger.info("LLM request attempt endpoint=%s model=%s", url.rsplit("/", 1)[-1], model)
+                response_payload = self._post_json(url, payload)
+                text = _extract_response_text(response_payload)
+                if text.strip():
+                    cleaned = text.strip()
+                    logger.info(
+                        "LLM request done provider=openai-http endpoint=%s model=%s duration=%.2fs output_chars=%s",
+                        url.rsplit("/", 1)[-1],
+                        model,
+                        time.perf_counter() - started,
+                        len(cleaned),
+                    )
+                    return cleaned
+                errors.append(f"{url}: empty response body")
+            except Exception as exc:  # pragma: no cover - network/provider dependent
+                logger.info("LLM request failed endpoint=%s model=%s error=%s", url.rsplit("/", 1)[-1], model, exc)
+                errors.append(f"{url}: {exc}")
+
+        raise RuntimeError("OpenAI-compatible request failed: " + " | ".join(errors))
+
+    def _post_json(self, url: str, payload: dict[str, object]) -> object:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                raw = response.read().decode("utf-8")
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
+            if detail:
+                raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {detail[:500]}") from exc
+            raise RuntimeError(f"HTTP {exc.code} {exc.reason}") from exc
+        except URLError as exc:
+            raise RuntimeError(f"Request failed: {exc.reason}") from exc
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid JSON response: {raw[:500]}") from exc
 
 
 @dataclass(slots=True)
@@ -54,9 +190,14 @@ class FallbackClient:
     model: str = "offline-template"
 
     def generate(self, model: str, system_prompt: str, user_prompt: str) -> str:
+        logger = logging.getLogger("patentforge")
+        logger.info("LLM request start provider=fallback model=%s prompt_chars=%s", model, len(user_prompt))
         if _looks_like_review_prompt(system_prompt):
-            return _render_review_result(user_prompt)
-        return _render_writer_draft(user_prompt)
+            output = render_review_result(user_prompt)
+        else:
+            output = render_writer_output(user_prompt)
+        logger.info("LLM request done provider=fallback model=%s output_chars=%s", model, len(output))
+        return output
 
 
 def create_client(
@@ -64,21 +205,93 @@ def create_client(
     api_key: str | None = None,
     base_url: str | None = None,
 ) -> LLMClient:
+    load_project_env()
     normalized = provider.lower().strip()
     if normalized == "fallback":
         return FallbackClient(model="offline-template")
-    if normalized == "openai":
-        return OpenAIResponsesClient(api_key=api_key, base_url=base_url)
+    if normalized == "openai" or normalized == "auto":
+        if _has_openai_sdk():
+            return OpenAIResponsesClient(api_key=api_key, base_url=base_url)
+        return OpenAICompatibleHTTPClient(api_key=api_key, base_url=base_url)
 
-    try:
-        return OpenAIResponsesClient(api_key=api_key, base_url=base_url)
-    except Exception:
-        return FallbackClient(model="offline-template")
+    return FallbackClient(model="offline-template")
 
 
 def _looks_like_review_prompt(system_prompt: str) -> bool:
     prompt = system_prompt.lower()
     return "审核专家" in system_prompt or "review" in prompt or "审核员" in system_prompt
+
+
+def _has_openai_sdk() -> bool:
+    try:
+        from openai import OpenAI  # noqa: F401
+        return True
+    except ModuleNotFoundError:
+        return False
+
+
+def _extract_response_text(payload: object) -> str:
+    if not isinstance(payload, dict):
+        return ""
+
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    parts: list[str] = []
+
+    output = payload.get("output")
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+
+            item_type = item.get("type")
+            if item_type in {"output_text", "text"}:
+                text = item.get("text") or item.get("value")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+                continue
+
+            if item_type == "message":
+                content = item.get("content")
+                if isinstance(content, list):
+                    for chunk in content:
+                        if not isinstance(chunk, dict):
+                            continue
+                        chunk_type = chunk.get("type")
+                        if chunk_type in {"output_text", "text"}:
+                            text = chunk.get("text") or chunk.get("value")
+                            if isinstance(text, str) and text.strip():
+                                parts.append(text.strip())
+
+    if parts:
+        return "\n".join(parts).strip()
+
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+                if isinstance(content, list):
+                    nested: list[str] = []
+                    for chunk in content:
+                        if isinstance(chunk, dict):
+                            text = chunk.get("text") or chunk.get("value")
+                            if isinstance(text, str) and text.strip():
+                                nested.append(text.strip())
+                    if nested:
+                        return "\n".join(nested).strip()
+
+            text = first.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+
+    return ""
 
 
 def _extract_section(text: str, header: str) -> str:
@@ -103,8 +316,8 @@ def _extract_section(text: str, header: str) -> str:
 
 
 def _infer_title(user_prompt: str) -> str:
-    project_brief = _extract_section(user_prompt, "项目背景")
-    for line in project_brief.splitlines():
+    design_spec = _extract_section(user_prompt, "设计说明书")
+    for line in design_spec.splitlines():
         candidate = line.strip(" #\t")
         if candidate and candidate not in {"（未提供）", "未提供"}:
             return candidate[:48]

@@ -11,13 +11,21 @@ from patentforge.utils.prompt_loader import build_reviewer_user_prompt
 class ReviewerAgent(AgentBase):
     def run(
         self,
-        project_brief: str,
+        design_spec: str,
+        code_type: str,
+        output_name: str,
+        min_code_lines: int,
+        max_code_lines: int,
         draft: str,
         iteration: int = 0,
         max_iter: int = 5,
     ) -> ReviewResult:
         user_prompt = build_reviewer_user_prompt(
-            project_brief=project_brief,
+            design_spec=design_spec,
+            code_type=code_type,
+            output_name=output_name,
+            min_code_lines=min_code_lines,
+            max_code_lines=max_code_lines,
             draft=draft,
             iteration=iteration,
             max_iter=max_iter,
