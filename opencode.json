@@ -1,0 +1,35 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "default_agent": "code-writer",
+    "agent": {
+        "build": {
+            "mode": "subagent",
+            "disabled": true
+        },
+        "plan": {
+            "mode": "subagent",
+            "disabled": true
+        },
+        "code-writer": {
+            "description": "write code for the project",
+            "mode": "primary",
+            "model": "chuxin-ai/MiniMax-M2.5",
+            "prompt": "{file:./agent/programmer.md}",
+            "tools": {
+                "write": true,
+                "edit": true,
+                "bash": true
+            }
+        },
+        "code-reviewer": {
+            "description": "Reviews code for best practices and potential issues",
+            "mode": "primary",
+            "model": "chuxin-ai/qwen3.5-plus",
+            "prompt": "{file:./agent/reviewer.md}",
+            "tools": {
+                "write": false,
+                "edit": false
+            }
+        }
+    }
+}
