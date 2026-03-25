@@ -106,7 +106,7 @@ code-reviewer 复审
 
 ### 5.1 典型运行
 ```bash
-python -m patentforge       --design-file test_cases/sheji.md       --provider openai       --code-type typescript       --min-lines 3500       --max-lines 4000       --output-name sheji
+python -m patentforge       --design-file test_cases/sheji.md       --provider openai       --code-type typescript       --min-lines 4000       --max-lines 6000       --output-name sheji
 ```
 
 ### 5.2 常用参数
@@ -115,10 +115,15 @@ python -m patentforge       --design-file test_cases/sheji.md       --provider o
 | `--design-file` | 设计说明书路径 | 必填 |
 | `--provider` | LLM 提供商 | auto |
 | `--code-type` | 代码类型 | typescript |
-| `--min-lines` | 最小行数 | 3500 |
-| `--max-lines` | 最大行数 | 4000 |
+| `--min-lines` | 最小行数 | 4000 |
+| `--max-lines` | 最大行数 | 6000 |
 | `--output-name` | 输出文件基础名 | 自动推断 |
 | `--max-iter` | 最大迭代次数 | 5 |
+
+### 5.2.1 行数弹性规则
+- 默认目标范围为 **4000-6000 行**
+- 在用户未单独指定更严格范围时，允许按目标范围 **适度放宽 20%** 进行生成与审核
+- 对应弹性区间可按 **3200-7200 行** 理解，但仍应优先尽量落在 4000-6000 行主目标区间内
 
 ### 5.3 环境变量
 ```bash

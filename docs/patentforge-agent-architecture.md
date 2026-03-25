@@ -111,6 +111,7 @@
 2. writer / reviewer 为 subagent
 3. orchestrator 具备 write / edit / bash 权限
 4. reviewer 不具备 write / edit 权限
+5. 默认代码行数主目标范围为 `4000-6000`，在用户未单独要求更严格范围时，可按 `±20%` 弹性处理
 
 这意味着：
 
