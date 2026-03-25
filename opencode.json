@@ -1,6 +1,6 @@
 {
     "$schema": "https://opencode.ai/config.json",
-    "default_agent": "code-writer",
+    "default_agent": "patentforge-orchestrator",
     "agent": {
         "build": {
             "mode": "subagent",
@@ -10,9 +10,20 @@
             "mode": "subagent",
             "disabled": true
         },
-        "code-writer": {
-            "description": "write code for the project",
+        "patentforge-orchestrator": {
+            "description": "Orchestrate code writing and review for PatentForge",
             "mode": "primary",
+            "model": "chuxin-ai/gpt-5.4",
+            "prompt": "{file:./agent/orchestrator.md}",
+            "tools": {
+                "write": true,
+                "edit": true,
+                "bash": true
+            }
+        },
+        "code-writer": {
+            "description": "Write code for the project",
+            "mode": "subagent",
             "model": "chuxin-ai/MiniMax-M2.5",
             "prompt": "{file:./agent/programmer.md}",
             "tools": {
@@ -22,8 +33,8 @@
             }
         },
         "code-reviewer": {
-            "description": "Reviews code for best practices and potential issues",
-            "mode": "primary",
+            "description": "Review generated code and design materials",
+            "mode": "subagent",
             "model": "chuxin-ai/qwen3.5-plus",
             "prompt": "{file:./agent/reviewer.md}",
             "tools": {
