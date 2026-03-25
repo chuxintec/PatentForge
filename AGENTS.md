@@ -8,7 +8,7 @@
 
 PatentForge 当前采用 **编排智能体 + Writer + Reviewer** 的协作架构：
 
-- **PatentForge-Orchestrator**：负责流程编排与结果落盘
+- **Orchestrator**：负责流程编排与结果落盘
 - **Code-Writer**：根据设计说明书生成软著源代码
 - **Code-Reviewer**：审核设计说明书和源代码，输出结构化结论
 
@@ -47,7 +47,7 @@ PatentForge 当前采用 **编排智能体 + Writer + Reviewer** 的协作架构
 ## 三、角色协作规则
 
 ### 3.1 Orchestrator 工作规则
-1. 默认入口角色是 `patentforge-orchestrator`
+1. 默认入口角色是 `orchestrator`
 2. 它负责识别任务类型：生成 / 审核 / 修订
 3. 它先调度 `code-writer`，再调度 `code-reviewer`
 4. 审核报告由 orchestrator 负责写入 `test_cases/outputs/`
@@ -74,7 +74,7 @@ PatentForge 当前采用 **编排智能体 + Writer + Reviewer** 的协作架构
 ```text
 用户任务
   ↓
-patentforge-orchestrator
+orchestrator
   ↓
 读取 test_cases/*.md
   ↓
@@ -205,7 +205,7 @@ Reviewer 不是简单判断“像不像 AI”，而是同时看：
 
 ### 9.1 writer 写完后没有自动审核
 检查：
-- `default_agent` 是否是 `patentforge-orchestrator`
+- `default_agent` 是否是 `orchestrator`
 - `code-writer` / `code-reviewer` 是否已改为 `subagent`
 - `agent/orchestrator.md` 是否存在且流程说明正确
 

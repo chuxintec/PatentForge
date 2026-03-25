@@ -8,7 +8,7 @@
 
 当前项目不是“两个主智能体并列工作”，而是采用 **1 个编排智能体 + 2 个业务子智能体** 的结构：
 
-1. `patentforge-orchestrator`
+1. `orchestrator`
    - 默认入口智能体
    - 负责组织整体流程
    - 模型：`chuxin-ai/gpt-5.4`
@@ -37,7 +37,7 @@
 ```json
 {
     "$schema": "https://opencode.ai/config.json",
-    "default_agent": "patentforge-orchestrator",
+    "default_agent": "orchestrator",
     "agent": {
         "build": {
             "mode": "subagent",
@@ -47,7 +47,7 @@
             "mode": "subagent",
             "disabled": true
         },
-        "patentforge-orchestrator": {
+        "orchestrator": {
             "description": "Orchestrate code writing and review for PatentForge",
             "mode": "primary",
             "model": "chuxin-ai/gpt-5.4",
@@ -112,7 +112,7 @@ opencode.json
 ```json
 {
   "agent": {
-    "patentforge-orchestrator": { ... },
+    "orchestrator": { ... },
     "code-writer": { ... },
     "code-reviewer": { ... }
   }
@@ -123,7 +123,7 @@ opencode.json
 
 本项目里的角色分为两类：
 
-- 主角色：`patentforge-orchestrator`
+- 主角色：`orchestrator`
 - 子角色：`code-writer`、`code-reviewer`、`build`、`plan`
 
 ---
@@ -171,7 +171,7 @@ opencode.json
 ### 2. `default_agent`
 
 ```json
-"default_agent": "patentforge-orchestrator"
+"default_agent": "orchestrator"
 ```
 
 作用：
@@ -214,7 +214,7 @@ opencode.json
 
 本项目里：
 
-- `patentforge-orchestrator` 是 primary
+- `orchestrator` 是 primary
 
 #### `mode: "subagent"`
 
@@ -271,7 +271,7 @@ opencode.json
 
 | 角色 | 模型 | 作用 |
 |------|------|------|
-| patentforge-orchestrator | `chuxin-ai/gpt-5.4` | 负责总控与流程编排 |
+| orchestrator | `chuxin-ai/gpt-5.4` | 负责总控与流程编排 |
 | code-writer | `chuxin-ai/MiniMax-M2.5` | 负责生成代码 |
 | code-reviewer | `chuxin-ai/qwen3.5-plus` | 负责审核代码与文档 |
 
@@ -348,7 +348,7 @@ opencode.json
 
 ## 五、当前项目级智能体能完成什么特定工作
 
-### 1. patentforge-orchestrator 能做什么
+### 1. orchestrator 能做什么
 
 这是当前项目的默认入口角色，负责：
 

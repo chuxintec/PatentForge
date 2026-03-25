@@ -20,13 +20,13 @@
 
 当前采用三角色结构：
 
-- **patentforge-orchestrator**：流程编排层
+- **orchestrator**：流程编排层
 - **code-writer**：代码生成层
 - **code-reviewer**：审核评估层
 
 其中：
 
-- `patentforge-orchestrator` 是唯一 primary agent
+- `orchestrator` 是唯一 primary agent
 - `code-writer` 与 `code-reviewer` 都是 subagent
 - `build` / `plan` 当前均禁用，避免干扰主流程
 
@@ -34,7 +34,7 @@
 
 ## 三、角色职责划分
 
-### 3.1 patentforge-orchestrator
+### 3.1 orchestrator
 
 **模型**：`chuxin-ai/gpt-5.4`
 
@@ -107,7 +107,7 @@
 
 核心配置逻辑如下：
 
-1. `default_agent = patentforge-orchestrator`
+1. `default_agent = orchestrator`
 2. writer / reviewer 为 subagent
 3. orchestrator 具备 write / edit / bash 权限
 4. reviewer 不具备 write / edit 权限
@@ -177,7 +177,7 @@ test_cases/outputs/
 ```text
 用户输入设计说明书任务
     ↓
-patentforge-orchestrator
+orchestrator
     ↓
 识别输入文件 / 代码类型 / 输出名
     ↓
@@ -199,7 +199,7 @@ orchestrator 将审核报告落盘到 test_cases/outputs/
 ```text
 用户要求根据审核意见修改代码
     ↓
-patentforge-orchestrator
+orchestrator
     ↓
 读取既有审核报告
     ↓

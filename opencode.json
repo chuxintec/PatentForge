@@ -1,6 +1,6 @@
 {
     "$schema": "https://opencode.ai/config.json",
-    "default_agent": "patentforge-orchestrator",
+    "default_agent": "orchestrator",
     "agent": {
         "build": {
             "mode": "subagent",
@@ -10,7 +10,7 @@
             "mode": "subagent",
             "disabled": true
         },
-        "patentforge-orchestrator": {
+        "orchestrator": {
             "description": "Orchestrate code writing and review for PatentForge",
             "mode": "primary",
             "model": "chuxin-ai/gpt-5.4",
